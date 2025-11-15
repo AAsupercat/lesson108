@@ -21,7 +21,7 @@ eg:  git config --unset user.name
 2. 暂存区，add加载到的区域
 3. 本地仓库，commit到的区域
 
-![alt text](pang/image.png)
+![alt text](png/image.png)
 
 ## 三板斧
 
@@ -42,11 +42,11 @@ Git追踪管理的是修改而不是文件。
 
 git reset HAND(表示回退到当前版本)。 HAND^^(表示回退到上两个版本)
 
-![alt text](pang/image-1.png)
+![alt text](png/image-1.png)
 
 2. git checkout -- [filename] 回退到最近一次add
 
-![alt text](pang/image-2.png)
+![alt text](png/image-2.png)
 
 ## 删除版本库中文件
 
@@ -65,7 +65,7 @@ git branch 查看本地分支 git branch -r 查看远端分支
 
 1. 当merge冲突发生后，会在代码中给你标注处理，操作人员自己选择删除哪一个。最后再commit提交到版本库中
 2. 两个分支会重合，但是有一个会指向原本的位置
-![alt text](pang/image-3.png)
+![alt text](png/image-3.png)
 
 fast forward：--ff 是看不出是谁提交进来的  默认      
 no-fast forward --no-ff 可以看出谁提交进来的  git merge --no-ff -m "备注" 分支名
@@ -104,7 +104,7 @@ Pull Request：开发过程中，dev分支开发，直接合并到master是不�
 ## 克隆操作
 不允许在本地仓库环境下进行克隆。远程仓库：origin（远程仓库的默认名字）
 git remote 查询远程仓库信息，git remote -v 查询相应权限：fetch 拉权限，push 推权限
-![alt text](pang/image-4.png)
+![alt text](png/image-4.png)
 
 1. Https：git clone https://github.com/AAsupercat/lesson108.git 通过https将远端仓库克隆到本地。
 2. SSH：git clone git@github.com:AAsupercat/lesson108.git 
@@ -123,7 +123,7 @@ ssh-keygen -t rsa -C "2261391739@qq.com" 就完成了创造。然后我们查看
 
 1. .gitignore文件：我们有一些本地不想远端看到的内容，在推送时，我们忽略他们，不将相应文件推送。比如数据库。注意：这个文件要在Git工作区的根目录下。
 
-![alt text](pang/image-4.png)
+![alt text](png/image-4.png)
 
 2. 给指令起别名，比如：status比较复杂就使用，给它取个别名st ---> git config --global alias.st status
 
@@ -157,9 +157,9 @@ ssh-keygen -t rsa -C "2261391739@qq.com" 就完成了创造。然后我们查看
 
 - 场景2：不同分支，一个功能对应一个分支，合作开发（38）
 
-![alt text](pang/image-6.png)
+![alt text](png/image-6.png)
 
 
 # 企业级开发模型
 
-![alt text](pang/image-7.png)
+![alt text](png/image-7.png)
