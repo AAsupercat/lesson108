@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "*.wsd": "bat",
+        "thread": "cpp"
+    }
+}
