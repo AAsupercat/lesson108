@@ -163,3 +163,45 @@ ssh-keygen -t rsa -C "2261391739@qq.com" 就完成了创造。然后我们查看
 # 企业级开发模型
 
 ![alt text](png/image-7.png)
+
+![alt text](png/image-8.png)
+
+## Git Flow模型
+
+master 分⽀
+• master 为主分⽀，该分⽀为只读且唯⼀分⽀。⽤于部署到正式发布环境，⼀般由合并
+release 分⽀得到。
+• 主分⽀作为稳定的唯⼀代码库,任何情况下不允许直接在 master 分⽀上修改代码。
+• 产品的功能全部实现后，最终在master分⽀对外发布，另外所有在master分⽀的推送应该打标签
+（tag）做记录，⽅便追溯。
+• master 分⽀不可删除。
+
+release 分⽀
+• release 为预发布分⽀，基于本次上线所有的 feature 分⽀合并到 develop 分⽀之后，基
+于 develop 分⽀创建。可以部署到测试或预发布集群。
+• 命名以 release/ 开头，建议的命名规则: release/version_publishtime 。
+• release 分⽀主要⽤于提交给测试⼈员进⾏功能测试。发布提测阶段，会以 release 分⽀代码
+为基准进⾏提测。
+• 如果在 release 分⽀测试出问题，需要回归验证 develop 分⽀看否存在此问题。
+• release 分⽀属于临时分⽀，产品上线后可选删除。
+
+develop 分⽀
+• develop 为开发分⽀，基于master分⽀创建的只读且唯⼀分⽀，始终保持最新完成以及 bug 修
+复后的代码。可部署到开发环境对应集群。
+• 可根据需求⼤⼩程度确定是由 feature 分⽀合并，还是直接在上⾯开发（⾮常不建议）。
+
+feature 分⽀
+• feature 分⽀通常为新功能或新特性开发分⽀，以 develop 分⽀为基础创建 feature 分
+⽀。
+• 命名以 feature/ 开头，建议的命名规则： feature/user_createtime_feature 。
+• 新特性或新功能开发完成后，开发⼈员需合到 develop 分⽀。
+• ⼀旦该需求发布上线，便将其删除。
+
+hotfix 分⽀
+• hotfix 分⽀为线上 bug 修复分⽀或叫补丁分⽀，主要⽤于对线上的版本进⾏ bug 修复。当线上
+出现紧急问题需要⻢上修复时，需要基于 master 分⽀创建 hotfix 分⽀。
+• 命名以 hotfix/ 开头，建议的命名规则: hotfix/user_createtime_hotfix
+• 当问题修复完成后，需要合并到 master 分⽀和 develop 分⽀并推送远程。⼀旦修复上线，便
+将其删除。
+
+![alt text](png/image-9.png)
