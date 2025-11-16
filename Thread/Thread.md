@@ -142,3 +142,278 @@ CPU硬件级别的缓存Cache，Cache，存储CPU调度过程中高度被访问�
     - 独占资源（线程ID，**一组寄存器（独立上下文）**，**栈**，errno，信号屏蔽字，调度优先级）
 - 进程和多个线程大部分都是共享的，比如地址空间，代码和数据都是共享的，定义一个函数，在各个线程中都是可以调用的
     - 共享资源（**文件描述符表**，每种信号处理方式，当前工作目录，用户id和组id）
+
+### 代码实践体现
+Linux 内核中有没有明确的线程的概念呢？没有的。只有轻量级进程的概念，不会给我们直接一共线程的系统调用，只会给我们提供轻量级进程的系统调用。但是我们程序员需要线程接口。因此就有程序员完成了**pthread库** 应用层，轻量级进程接口进行封装。为用户提供线程接口。Linux平台默认自带，编程时使用第三方pthread库。
+
+```cpp
+#include <pthread>
+
+int pthread_create(pthread_t* thread,const pthread_attr_t *attr
+                        ,void* (*start_routine)(void*),void* arg);
+```
+- `pthread_t` 整形封装来的，`thread`是个输出型参数，`thread id`，无符号长整数`unsigned long int`
+- `const pthread_attr_t* attr` 线程的属性，大多时候不用管，设置为`nullptr`
+- `void* (*start_routine)(void*)` 函数指针，返回值和参数都是`void*`的函数指针，指定线程的函数接口（入口函数），参数和返回值的问题
+- `void* arg`，线程创建成功后，新线程回调入口函数时，需要参数，这个参数就是给回调函数传递参数的
+- 返回值，成功0，非零表示错误，没有errno
+
+**注意：在使用`gcc/g++`编译时，要使用 `-pthread`,才能编译通过（链接成功）即：`g++ -o $@ $^ -pthread`**
+
+提问：为什么只需要`-l`就可以链接成功?
+回答：因为`pthread库`是系统自带的。
+
+--- 
+```cpp
+#include<iostream>
+#include<pthread.h>
+#include<unistd.h>
+
+void* threadRoutine(void* arg)
+{
+    while(1)
+    {
+        std::cout<<"new thread,pid:"<<getpid()<<std::endl;
+        sleep(2);
+    }
+    
+    return nullptr;
+}
+
+int main()
+{
+    pthread_t tid;
+    pthread_create(&tid,nullptr,threadRoutine,nullptr);
+    while(1)
+    {
+        std::cout<<"main thread,pid:"<<getpid()<<std::endl;
+        sleep(1);
+    }
+
+    return 0;
+}
+```
+
+通过指令`ps -aL`可以查询线程（轻量级进程LWP），如图：
+
+![alt text](png/image1.png)
+
+可以发现PID是完全相同的，LWP则不相同，其中PID和LWP相同的那个是主线程
+
+那使用信号`killed -9 LWP`，杀死的是进程还是线程？是进程，线程出现异常，进程也会退出
+
+```cpp
+#include<iostream>
+#include<pthread.h>
+#include<unistd.h>
+#include<string.h>
+
+int g_val = 0;
+void show(const std::string& name)
+{
+    std::cout<<name<<std::endl;
+}
+
+void* threadRoutine(void* arg)
+{
+    while(1)
+    {
+        printf("new thread pid: %d,g_val:%d,&g_val: 0x%p\n",getpid(),g_val,&g_val);
+        show("new thread");
+        sleep(1);
+    }
+    
+    return nullptr;
+}
+
+int main()
+{
+    pthread_t tid;
+    pthread_create(&tid,nullptr,threadRoutine,nullptr);
+    while(1)
+    {
+        printf("main thread pid: %d,g_val:%d,&g_val: 0x%p\n",getpid(),g_val,&g_val);
+        show("main thread");
+        sleep(1);
+        g_val++;
+    }
+
+    return 0;
+}
+```
+
+![alt text](png/image2.png)
+
+可以的出结论：函数是重入的，全局变量也是共享的，都可以访问，也就是说明线程间通信是很简单的。并发性更加先进。
+
+```cpp
+#include<iostream>
+#include<pthread.h>
+#include<unistd.h>
+#include<string.h>
+
+int g_val = 0;
+void show(const std::string& name)
+{
+    std::cout<<name<<std::endl;
+}
+
+void* threadRoutine(void* arg)
+{
+    char* name = (char*)arg;
+    while(1)
+    {
+        printf("%s pid: %d\n",name,getpid());
+        sleep(1);
+    }
+    
+    return nullptr;
+}
+
+int main()
+{
+    pthread_t tid;
+    pthread_create(&tid,nullptr,threadRoutine,(void*)"Thread 1");
+    while(1)
+    {
+        printf("main thread pid: %d, tid: %lu\n",getpid(),tid);
+        sleep(1);
+    }
+
+    return 0;
+}
+```
+
+在`arg`中传入参数，`threadRoutine`接受到参数，如图：
+
+![alt text](png/image3.png)
+
+如果我们想拿到自己的线程id怎么拿到? `pthread_self()`
+```cpp
+pthread_t pthread_selt(void);
+```
+
+### 线程的等待
+
+主线程创建了新线程，也就有管理的义务，所以应该是最后退出。所以新线程创建出来了，也需要被等待。
+1. 防止新线程内存泄漏
+2. 接受任务结束信息（是否完成，是否有错）
+
+```cpp
+int pthread_join(pthread_t thread, void **retval);
+```
+
+这个函数默认阻塞等待。主线程要做两件事，确认新线程结束以及获取返回信息。等待可以确定新线程结束，而`retval`可以得到新线程结束的返回信息。
+
+### 线程退出的方式
+1. `return (void*)1;` return返回退出新线程
+2. `pthread_exit((void*)1);` 函数退出返回
+3. `pthread_cancel(pthread_t tid)` 主线程调用函数取消新线程，不常用
+
+**注意：exit()，是专门推出进程的，不能用于退出线程**
+
+### 线程的参数和返回值
+
+**重点，新线程的参数和返回值，可以是任何类对象！！！**
+
+如下代码：
+
+```cpp
+struct request
+{
+    int num1_;
+    int num2_;
+    char oper_;
+
+    request(int num1,int num2,char oper)
+    :num1_(num1),num2_(num2),oper_(oper)
+    {}
+};
+
+struct response
+{   
+    int result_;
+    std::string retval_="0";
+
+    response* resRun(request* rep)
+    {
+        switch (rep->oper_)
+        {
+        case '+':
+            result_=rep->num1_+rep->num2_;
+            break;
+        case '-':
+            result_=rep->num1_-rep->num2_;
+            break;
+        case '*':
+            result_=rep->num1_*rep->num2_;
+            break;
+        case '/':
+            if(rep->num2_==0) 
+            {
+                retval_="除零错误";
+                return this;
+            }
+            result_=rep->num1_/rep->num2_;
+            break;
+        default:
+            break;
+        }
+
+        return this;
+    }
+};
+
+void* threadRoutine(void* arg)
+{
+    //强转接受
+    request* rep = static_cast<request*>(arg);
+    //逻辑处理
+    response* rsp = new response();
+    rsp->resRun(rep);
+    //新线程退出
+    pthread_exit(rsp);
+}
+int main()
+{
+    pthread_t tid;
+    request* rep = new request(1,0,'/');
+    pthread_create(&tid,nullptr,threadRoutine,rep);
+    //数据等待，接受数据
+    void* ret;
+    pthread_join(tid,&ret);
+    response* rsp=static_cast<response*>(ret);
+    std::cout<<rsp->result_<<" "<<rsp->retval_<<std::endl;
+    return 0;
+}
+```
+
+### C++11的线程库与Linux的原生线程库
+
+`#include<thread>` 
+`#include<pthread.h>`
+
+举例说明关系：当我们用`g++ -o $@ $^ -std=c++11`这样编译的时候，会报错：
+链接错误，链接的是pthread_create()，也就是说C++11的<thread>就是对Linux的原生线程库的封装。新版本的ubuntu已经优化`g++ -o $@ $^`就可以直接跑C++11以及线程库。默认Ubuntu>=21.0，已经默认支持C++17了
+所以标准的方式是`g++ -o $@ $^ -std=c++11 -lpthread`
+
+![alt text](png/image4.png)
+
+**C++语言，具有跨平台型，因为c++11的线程库，已经封装了Linux/Windows各自的线程库。**
+
+### tid如何理解？线程对于Linux来说是什么？
+我们之前说过，线程就是轻量级进程,进程的创造是通过用户层的接口fork(),创造的子进程，而这个函数在底层实际上是调用了clone()函数，这是Linux操作系统的函数，用户无法调用。同样，我们的线程创建也是如此。
+
+![alt text](png/image5.png)
+
+- 第一个参数是一个函数指针，也就是创建出来的执行流，就会使用这个函数方法。
+- 第二个参数自定义一个栈
+- 第三个参数就是需不需要和地址空间实现共享，线程是默认需要实现共享
+
+clone我们无法直接调用，就被线程库封装了，我们就是在使用pthread_create等接口。我们调用需要提供一个回调函数，以及一个独立栈，回调函数就是执行代码，独立栈先不管。
+
+也就是说，线程的概念，是线程库在帮我们维护，线程库动态库会加载到内存中，通过页表映射到共享区。线程库维护线程概念，也就是要维护线程的属性，操作系统维护执行流。所以线程库先描述，再组织，维护线程的集合，数组的形式来维护。也就是线程控制块TCB；对上告诉我们属性等，对下要知道这个线程对应那个执行流，由用户来维护的线程，就叫做用户级线程。TCB的每一个起始地址也就是线程的tid。tid地址在堆栈之间的区域
+
+线程栈：每个线程都有自己的调度执行流，这个函数调度到另外的函数，都有自己的函数调度，也就需要独立的栈结构。因此除了主线程的栈是在栈中，其他的栈结构都在TCB中，由mmap()在任何可用虚拟地址分配，地址位于共享区，但是不能被相互访问。
+
+![alt text](png/image6.png)
