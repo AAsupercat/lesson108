@@ -1,9 +1,12 @@
 //快速使用一下pthread库
 #include<iostream>
 #include<thread>
+#include<vector>
 #include<pthread.h>
 #include<unistd.h>
 #include<string.h>
+
+#define NUM 3
 
 // int g_val = 0;
 // void show(const std::string& name)
@@ -108,18 +111,67 @@
 //     return 0;
 // }
 
-void threadrun()
+// void threadrun()
+// {
+//     while(1)
+//     {
+//         std::cout<<"这是C++11的线程库"<<std::endl;
+//         sleep(1);
+//     }
+// }
+
+// int main()
+// {
+//     std::thread t1(threadrun);
+//     t1.join();
+//     return 0;
+// }
+
+// int main()
+// {
+//     pthread_t tid;
+//     pthread_create(&tid,nullptr,threadRoutine,nullptr);
+//     pthread_exit();
+//     pthread_self();
+//     pthread_join(tid,nullptr);
+
+//     thread t1(threadRun);
+//     t1.join()
+
+
+//     return 0;
+// }
+std::string toHex(pthread_t tid)
 {
-    while(1)
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "%lx", tid);
+    return buffer;
+}
+
+void* threadRoutine(void* args)
+{
+    int test_i=0;
+    for(test_i=0;test_i<10;test_i++)
     {
-        std::cout<<"这是C++11的线程库"<<std::endl;
+        std::cout<<toHex(pthread_self())<<", test_i="<<test_i<<std::endl;
         sleep(1);
     }
+    pthread_exit((void*)0);
 }
 
 int main()
 {
-    std::thread t1(threadrun);
-    t1.join();
+    std::vector<pthread_t> tids;
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_t tid;
+        tids.push_back(tid);
+        pthread_create(&tids[i],nullptr,threadRoutine,nullptr);
+    }
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_join(tids[i],nullptr);
+    }
+
     return 0;
 }

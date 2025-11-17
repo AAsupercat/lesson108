@@ -143,7 +143,7 @@ CPU硬件级别的缓存Cache，Cache，存储CPU调度过程中高度被访问�
 - 进程和多个线程大部分都是共享的，比如地址空间，代码和数据都是共享的，定义一个函数，在各个线程中都是可以调用的
     - 共享资源（**文件描述符表**，每种信号处理方式，当前工作目录，用户id和组id）
 
-### 代码实践体现
+## 代码实践体现
 Linux 内核中有没有明确的线程的概念呢？没有的。只有轻量级进程的概念，不会给我们直接一共线程的系统调用，只会给我们提供轻量级进程的系统调用。但是我们程序员需要线程接口。因此就有程序员完成了**pthread库** 应用层，轻量级进程接口进行封装。为用户提供线程接口。Linux平台默认自带，编程时使用第三方pthread库。
 
 ```cpp
@@ -417,3 +417,41 @@ clone我们无法直接调用，就被线程库封装了，我们就是在使用
 线程栈：每个线程都有自己的调度执行流，这个函数调度到另外的函数，都有自己的函数调度，也就需要独立的栈结构。因此除了主线程的栈是在栈中，其他的栈结构都在TCB中，由mmap()在任何可用虚拟地址分配，地址位于共享区，但是不能被相互访问。
 
 ![alt text](png/image6.png)
+
+这也就是为什么我们查到底层LWP的值和我们查到tid差距很大的原因，LWP是操作系统轻量级进程的管理，而tid是pthread管理tcb模块用的虚拟地址（动态库中）。
+
+证明：当我们创建多个线程时，都会调用threadRoutine()函数接口，但函数内部的临时变量，都是各自独立的，这就表明，线程是有自己独立的栈结构。
+
+```cpp
+void* threadRoutine(void* args)
+{
+    int test_i=0;
+    for(test_i=0;test_i<10;test_i++)
+    {
+        std::cout<<toHex(pthread_self())<<", test_i="<<test_i<<std::endl;
+        sleep(1);
+    }
+    pthread_exit((void*)0);
+}
+
+int main()
+{
+    std::vector<pthread_t> tids;
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_t tid;
+        tids.push_back(tid);
+        pthread_create(&tids[i],nullptr,threadRoutine,nullptr);
+        sleep(1);
+    }
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_join(tids[i],nullptr);
+    }
+
+    return 0;
+}
+```
+![alt text](png/image7.png)
+
+## 同步与互斥
