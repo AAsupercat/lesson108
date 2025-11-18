@@ -1,11 +1,12 @@
-//快速使用一下pthread库
-#include<iostream>
-#include<thread>
-#include<vector>
-#include<cstdio>
-#include<pthread.h>
-#include<unistd.h>
-#include<string.h>
+// 快速使用一下pthread库
+#include <iostream>
+#include <thread>
+#include <vector>
+#include <cstdio>
+#include <pthread.h>
+#include <unistd.h>
+#include <string.h>
+#include "LockGuard.hpp"
 
 #define NUM 5
 
@@ -56,7 +57,7 @@
 // };
 
 // struct response
-// {   
+// {
 //     int result_;
 //     std::string retval_="0";
 
@@ -74,7 +75,7 @@
 //             result_=rep->num1_*rep->num2_;
 //             break;
 //         case '/':
-//             if(rep->num2_==0) 
+//             if(rep->num2_==0)
 //             {
 //                 retval_="除零错误";
 //                 return this;
@@ -139,7 +140,6 @@
 //     thread t1(threadRun);
 //     t1.join()
 
-
 //     return 0;
 // }
 // std::string toHex(pthread_t tid)
@@ -177,62 +177,62 @@
 //     return 0;
 // }
 
-//抢票系统简单复现
-int tickets=10000;
+// 抢票系统简单复现
+int tickets = 10000;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 class ThreadDatas
 {
 public:
-    ThreadDatas(int num,pthread_mutex_t* lock)
+    ThreadDatas(int num, pthread_mutex_t *lock)
     {
-        tidname_="This is thread- " + std::to_string(num);
-        lock_=lock;
+        tidname_ = "This is thread- " + std::to_string(num);
+        lock_ = lock;
     }
+
 public:
     std::string tidname_;
-    pthread_mutex_t* lock_;
+    pthread_mutex_t *lock_;
 };
 
-void* gitticket(void* args)
+void *gitticket(void *args)
 {
-    ThreadDatas* td=static_cast<ThreadDatas*>(args);
-    while(1)
-    {   
-        pthread_mutex_lock(td->lock_);
-        if(tickets>0)
-        {
-            usleep(1000);
-            printf("%s: get the ticket::%d\n",td->tidname_.c_str(),tickets);
-            tickets--;
-            pthread_mutex_unlock(td->lock_);
-        }
-        else 
-        {
-            pthread_mutex_unlock(td->lock_);
-            break;
+    ThreadDatas *td = static_cast<ThreadDatas *>(args);
+    while (1)
+    {
+        {   //临界区，不管以什么方式，只要出了作用域，就直接释放，也就解锁。
+            LockGuard lockguard(&lock);
+            if (tickets > 0)
+            {
+                usleep(1000);
+                printf("%s: get the ticket::%d\n", td->tidname_.c_str(), tickets);
+                tickets--;
+            }
+            else
+                break;
         }
     }
-    printf("%s ...quit\n",td->tidname_.c_str());
+    printf("%s ...quit\n", td->tidname_.c_str());
     return nullptr;
 }
 int main()
 {
     std::vector<pthread_t> tids;
-    std::vector<ThreadDatas*> thread_datas;
-    pthread_mutex_t lock;
-    pthread_mutex_init(&lock,nullptr);
-    for(int i=0;i<NUM;i++)
+    std::vector<ThreadDatas *> thread_datas;
+    // pthread_mutex_t lock;
+    // pthread_mutex_init(&lock,nullptr);
+    for (int i = 0; i < NUM; i++)
     {
         pthread_t tid;
-        ThreadDatas* td=new ThreadDatas(i,&lock);
+        ThreadDatas *td = new ThreadDatas(i, &lock);
         thread_datas.push_back(td);
-        pthread_create(&tid,nullptr,gitticket,td);
+        pthread_create(&tid, nullptr, gitticket, td);
         tids.push_back(tid);
     }
 
-    for(int i=0;i<NUM;i++)
+    for (int i = 0; i < NUM; i++)
     {
-        pthread_join(tids[i],nullptr);
+        pthread_join(tids[i], nullptr);
     }
     pthread_mutex_destroy(&lock);
 
