@@ -303,12 +303,14 @@ pthread_t pthread_selt(void);
 int pthread_join(pthread_t thread, void **retval);
 ```
 
-这个函数默认阻塞等待。主线程要做两件事，确认新线程结束以及获取返回信息。等待可以确定新线程结束，而`retval`可以得到新线程结束的返回信息。
+这个函数默认阻塞等待。主线程要做两件事，确认新线程结束以及获取返回信息。等待可以确定新线程结束，而`retval`可以得到新线程结束的返回信息。返回值是0表示成功执行，返回值22，表示线程分离（一种可能），失败码，可以用strerror(返回值);来查询错误信息。
 
 ### 线程退出的方式
 1. `return (void*)1;` return返回退出新线程
 2. `pthread_exit((void*)1);` 函数退出返回
 3. `pthread_cancel(pthread_t tid)` 主线程调用函数取消新线程，不常用
+
+主线程调用pthread_exit(),其他线程不会退出。
 
 **注意：exit()，是专门推出进程的，不能用于退出线程**
 
@@ -454,4 +456,201 @@ int main()
 ```
 ![alt text](png/image7.png)
 
+### 线程局部存储
+
+每个线程都有独立的栈结构，而不是私有的栈结构。线程和线程之间没有秘密，栈上的数据都是可以访问的。
+全局变量是每个线程都可以访问的。但如果我要一个私有的全局变量呢？
+`__thread int g_val=100;` 线程的局部存储，`__thread`编译选项，每个线程都生成一份。局部存储只能用来定义内置类型，无法定义自定义类型。减少系统调用次数。
+
+### 线程分离
+
+- 默认情况下，新创建的线程是需要被等待资源释放的，没有释放会造成内存泄漏。如果不关心join的返回值时，等待就成了一种负担，因此我们需要一个系统调用，告诉系统，线程退出后自动释放资源。
+
+```cpp
+int pthread_detach(pthread_t tid);
+```
+可以使用主线程分离和新线程自己分离，可以造成同样的效果。注意保证主线程必须最后退出。主线程结束，进程资源就会被释放。
 ## 同步与互斥
+
+### 线程的互斥问题引入
+
+我们定义一个全局变量时，这个全局变量是共享资源，多线程并发访问时，会造成共享数据发生数据不一致问题！
+对于一个多线程全局变量做++/--的时候，是否是安全的？ 不是原子的。
+
+```cpp
+int tickets=1000;
+
+class ThreadDatas
+{
+public:
+    ThreadDatas(int num)
+    {
+        tidname_="This is thread- " + std::to_string(num);
+    }
+public:
+    std::string tidname_;
+};
+
+void* gitticket(void* args)
+{
+    ThreadDatas* td=static_cast<ThreadDatas*>(args);
+    while(1)
+    {
+        if(tickets>0)
+        {
+            usleep(1000);
+            printf("%s: get the ticket::%d\n",td->tidname_.c_str(),tickets);
+            tickets--;
+        }
+        else break;
+    }
+
+    return nullptr;
+}
+int main()
+{
+    std::vector<pthread_t> tids;
+    std::vector<ThreadDatas> thread_datas;
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_t tid;
+        ThreadDatas* td=new ThreadDatas(i);
+        pthread_create(&tid,nullptr,gitticket,td);
+        tids.push_back(tid);
+    }
+
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_join(tids[i],nullptr);
+    }
+    return 0;
+}
+```
+![alt text](png/image8.png)
+
+
+举个例子，CPU执行`tickets--`操作，有三个步骤：1.将tickets的数据从内存拷贝到CPU；2.执行--操作；3.再将数据拷贝到内存。每个步骤都会有对应的汇编代码。我们举例，有1000张票，CPU中有两个线程在执行抢票操作，进程1，执行完步骤1，将第1000张票拷贝进入CPU，然后时间片就没有了，就等待CPU调度；进程2特别幸运，将第1000张票，拷贝进入后，依次执行完整流程，更新内存票数是999，然后时间片还没有结束，继续多次执行，直到将内存中的票数执行到10时，终于结束了时间片。此时，线程1，重新开始执行，根据上下文接着执行，将原本的1000拿到了，然后依次操作，最后将999覆盖到原本10张票上。这就是数据不一致。
+
+对于tickets--这行代码，被转化为3条汇编代码，我们说它不具备原子性，可以在任意一条汇编代码结束后，时间片切换。一个操作是原子的，意味着它在执行过程中不可分割：要么完全执行，要么完全不执行，不会出现“执行到一半被其他线程打断”的情况。
+
+那图片结果中，为什么会出现负数？跟循环条件判断有关，是因为tickets=1时，5个线程并发进入循环，也就是线程0进入循环，然后时间片结束，CPU切换，线程1进入，再次切换，就这样五个线程都进入循环，都执行tickets--操作，也就有了之前的结果。
+
+为什么会有两个-1呢？那就是因为出现了第一个例子的情况，对全局变量++/--的操作，并发覆盖，覆盖了数据。
+
+**那如何解决这个问题呢？对于共享数据的访问，我们必须保证只有一个执行流进行访问**
+
+### 线程互斥锁
+
+锁的定义初始化，可以是全局的，也可以是局部的，只需要所有线程使用同一把锁就可以。
+`pthread_mutex_init` ：两个参数一个是系统类型锁，一个是锁的属性，一般为nullptr，即可，当成构造函数；
+`pthread_mutex_destroy`：参数就是所需释放的锁，当成析构函数；
+`pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; `：定义为全局直接初始化，不用init和destroy；
+
+```cpp
+#include <pthread.h>
+
+int pthread_mutex_init(pthread_mutex_t *restrict mutex, //初始化锁
+    const pthread_mutexattr_t *restrict attr);
+
+int pthread_mutex_destroy(pthread_mutex_t *mutex);  //互斥锁的释放 
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;  //全局锁
+
+```
+
+锁的使用：
+
+比如tickets是临界资源，访问临界资源的区域，在加锁与解锁之间的代码叫做临界区。
+加锁的本质：是使用时间来换安全。
+加锁的表现：对于临界区代码，串行执行。
+加锁的原则：尽量保证临界区代码越少越好。
+串行执行，会降低并发度，因此越少代码越好。
+
+```cpp
+#include <pthread.h>
+
+int pthread_mutex_lock(pthread_mutex_t *mutex);     //使用锁
+
+int pthread_mutex_unlock(pthread_mutex_t *mutex);   //解锁
+```
+
+局部锁代码演示：
+```cpp
+int tickets=10000;
+
+class ThreadDatas
+{
+public:
+    ThreadDatas(int num,pthread_mutex_t* lock)
+    {
+        tidname_="This is thread- " + std::to_string(num);
+        lock_=lock;
+    }
+public:
+    std::string tidname_;
+    pthread_mutex_t* lock_;
+};
+
+void* gitticket(void* args)
+{
+    ThreadDatas* td=static_cast<ThreadDatas*>(args);
+    while(1)
+    {   
+        //有可能出现只有一个线程在抢票，是因为线程对锁的竞争能力不同，一直一个线程抢到锁
+        pthread_mutex_lock(td->lock_);  //申请到锁就执行，没有申请到，就阻塞等待。
+        if(tickets>0)
+        {
+            usleep(1000);
+            printf("%s: get the ticket::%d\n",td->tidname_.c_str(),tickets);
+            tickets--;
+            pthread_mutex_unlock(td->lock_);
+        }
+        else 
+        {
+            pthread_mutex_unlock(td->lock_);
+            break;
+        }
+        usleep(20); //为什么加入这个就可以多线程抢票？因为在这个线程sleep期间，其他线程申请锁
+        //这个也是在模拟，抢到票后，收取数据等业务流程，并不会再次立马抢票
+    }
+    printf("%s ...quit\n",td->tidname_.c_str());
+    return nullptr;
+}
+int main()
+{
+    std::vector<pthread_t> tids;
+    std::vector<ThreadDatas*> thread_datas;
+    pthread_mutex_t lock;
+    pthread_mutex_init(&lock,nullptr);
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_t tid;
+        ThreadDatas* td=new ThreadDatas(i,&lock);
+        thread_datas.push_back(td);
+        pthread_create(&tid,nullptr,gitticket,td);
+        tids.push_back(tid);
+    }
+
+    for(int i=0;i<NUM;i++)
+    {
+        pthread_join(tids[i],nullptr);
+    }
+    pthread_mutex_destroy(&lock);
+
+    return 0;
+}
+```
+举个例子，你们学校有自习室，外边有一把钥匙，你一大早来，拿到钥匙进入自习室自习。中午你饿了，你拿着钥匙出来，却发现有很多同学虎视眈眈的盯着你手里的钥匙，你刚把钥匙放回原位，其他同学开始走过来了，你就后悔了，害怕吃完饭后抢不到钥匙，所以你就立马重新拿起钥匙，又进入了自习室。但是饿了，啥事没干，你又出去，放钥匙，又后悔，又进入，如此反复。饥饿问题就产生了。
+
+纯互斥环境，容易导致其他线程申请不到锁，从而导致线程的饥饿问题。当然并不是必然存在的。适合用于纯互斥场景。那如何解决可能存在的饥饿问题呢？
+
+我们需要一个观察员：1.外边来的必须排队，一个一个来；2.出来的人，不能立马排队，必须排到队尾；保证所有线程或者人获取锁。无序的获取，变成了有一定的顺序性。
+
+按照一定的顺序获取资源我们叫做同步；，而一次只允许一个执行流访问就叫做互斥
+
+那么，有个问题，我们的锁，也是共享资源，那如何保证锁资源是安全的呢？
+所以申请锁和释放锁的过程本身就是原子的。（如何做到的）
+
+那么临界区中，线程可以被切换吗？可以被切换，但是临界区中的线程时带着锁走的，所以其他线程仍然无法访问里面资源。对于其他线程来讲，只关注当前线程是否将锁释放，那么可以说临界区代码对于其他线程来说就是原子的。
+
+### 锁的原理
