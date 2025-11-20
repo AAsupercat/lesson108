@@ -27,7 +27,7 @@ public:
     {
         pthread_mutex_lock(&mutex_);
         //如果队列为空，则等待消费者条件变量
-        if(q_.size()==0)
+        while(q_.size()==0) //防止误唤醒
         {
             pthread_cond_wait(&c_cond_,&mutex_);
         }
@@ -44,7 +44,7 @@ public:
     {
         pthread_mutex_lock(&mutex_);
         //如果队列已满，则等待生产者条件变量
-        if(q_.size()==extremum_)
+        while(q_.size()==extremum_) //防止误唤醒
         {
             pthread_cond_wait(&p_cond_,&mutex_);
         }
