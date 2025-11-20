@@ -47,5 +47,6 @@ int main()
 
     pthread_join(ctid,nullptr);
     pthread_join(ptid,nullptr);
+    delete bt;
     return 0;
 }

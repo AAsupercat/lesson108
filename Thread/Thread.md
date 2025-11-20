@@ -805,4 +805,54 @@ cp问题：consumer productor问题，生产消费者模型
 
  ### 基于阻塞队列的cp模型
 
- BlockingQueue
+BlockingQueue（阻塞队列） 是一个线程安全的有界队列，用于实现生产者-消费者模型。
+
+1. 线程间通信：作为生产者与消费者之间的缓冲通道，生产者通过 push() 放入数据，消费者通过 pop() 取出数据。
+2. 自动阻塞：当队列为空时，pop() 会阻塞等待；当队列满时，push() 会阻塞等待，无需手动轮询。
+3. 同步机制：使用互斥锁（pthread_mutex_t）保证线程安全，使用条件变量（pthread_cond_t）实现等待和唤醒。
+
+**线程安全操作**
+`push()` 方法（生产者接口）：
+```cpp
+    // 生产者接口：队列已满则阻塞等待，放入元素后达到高水位线唤醒消费者
+    void push(const T& task)
+    {
+        pthread_mutex_lock(&mutex_);
+        //如果队列已满，则等待生产者条件变量
+        if(q_.size()==extremum_)
+        {
+            pthread_cond_wait(&p_cond_,&mutex_);
+        }
+        // 没有达到极值，继续生产并入队
+        q_.push(task);
+        //如果队列大小大于等于高水位线，则唤醒消费者
+        if(q_.size()>=height_water_) pthread_cond_signal(&c_cond_);
+        pthread_mutex_unlock(&mutex_);
+    }
+```
+
+`pop()` 方法（消费者接口）：
+```cpp
+    // 消费者接口：当队列为空时阻塞等待，取出元素后若低于低水位线唤醒生产者
+    T pop()
+    {
+        pthread_mutex_lock(&mutex_);
+        //如果队列为空，则等待消费者条件变量
+        if(q_.size()==0)
+        {
+            pthread_cond_wait(&c_cond_,&mutex_);
+        }
+        T task = q_.front();
+        q_.pop();
+        //如果队列大小小于等于低水位线，则唤醒生产者
+        if(q_.size()<=low_water_) pthread_cond_signal(&p_cond_);
+        pthread_mutex_unlock(&mutex_);
+        return task;
+    }
+```
+
+**优势：**
+1. 解耦：生产者和消费者互不关心，只需操作队列
+2. 支持忙闲不均：队列缓冲可平滑处理速率差异
+3. 背压控制：通过水位线避免频繁唤醒，提高效率
+4. 线程安全：所有操作都在互斥锁保护下进行

@@ -178,63 +178,63 @@
 // }
 
 // 抢票系统简单复现
-int tickets = 10000;
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+// int tickets = 10000;
+// pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-class ThreadDatas
-{
-public:
-    ThreadDatas(int num, pthread_mutex_t *lock)
-    {
-        tidname_ = "This is thread- " + std::to_string(num);
-        lock_ = lock;
-    }
+// class ThreadDatas
+// {
+// public:
+//     ThreadDatas(int num, pthread_mutex_t *lock)
+//     {
+//         tidname_ = "This is thread- " + std::to_string(num);
+//         lock_ = lock;
+//     }
 
-public:
-    std::string tidname_;
-    pthread_mutex_t *lock_;
-};
+// public:
+//     std::string tidname_;
+//     pthread_mutex_t *lock_;
+// };
 
-void *gitticket(void *args)
-{
-    ThreadDatas *td = static_cast<ThreadDatas *>(args);
-    while (1)
-    {
-        {   //临界区，不管以什么方式，只要出了作用域，就直接释放，也就解锁。
-            LockGuard lockguard(&lock);
-            if (tickets > 0)
-            {
-                usleep(1000);
-                printf("%s: get the ticket::%d\n", td->tidname_.c_str(), tickets);
-                tickets--;
-            }
-            else
-                break;
-        }
-    }
-    printf("%s ...quit\n", td->tidname_.c_str());
-    return nullptr;
-}
-int main()
-{
-    std::vector<pthread_t> tids;
-    std::vector<ThreadDatas *> thread_datas;
-    // pthread_mutex_t lock;
-    // pthread_mutex_init(&lock,nullptr);
-    for (int i = 0; i < NUM; i++)
-    {
-        pthread_t tid;
-        ThreadDatas *td = new ThreadDatas(i, &lock);
-        thread_datas.push_back(td);
-        pthread_create(&tid, nullptr, gitticket, td);
-        tids.push_back(tid);
-    }
+// void *gitticket(void *args)
+// {
+//     ThreadDatas *td = static_cast<ThreadDatas *>(args);
+//     while (1)
+//     {
+//         {   //临界区，不管以什么方式，只要出了作用域，就直接释放，也就解锁。
+//             LockGuard lockguard(&lock);
+//             if (tickets > 0)
+//             {
+//                 usleep(1000);
+//                 printf("%s: get the ticket::%d\n", td->tidname_.c_str(), tickets);
+//                 tickets--;
+//             }
+//             else
+//                 break;
+//         }
+//     }
+//     printf("%s ...quit\n", td->tidname_.c_str());
+//     return nullptr;
+// }
+// int main()
+// {
+//     std::vector<pthread_t> tids;
+//     std::vector<ThreadDatas *> thread_datas;
+//     // pthread_mutex_t lock;
+//     // pthread_mutex_init(&lock,nullptr);
+//     for (int i = 0; i < NUM; i++)
+//     {
+//         pthread_t tid;
+//         ThreadDatas *td = new ThreadDatas(i, &lock);
+//         thread_datas.push_back(td);
+//         pthread_create(&tid, nullptr, gitticket, td);
+//         tids.push_back(tid);
+//     }
 
-    for (int i = 0; i < NUM; i++)
-    {
-        pthread_join(tids[i], nullptr);
-    }
-    pthread_mutex_destroy(&lock);
+//     for (int i = 0; i < NUM; i++)
+//     {
+//         pthread_join(tids[i], nullptr);
+//     }
+//     pthread_mutex_destroy(&lock);
 
-    return 0;
-}
+//     return 0;
+// }
