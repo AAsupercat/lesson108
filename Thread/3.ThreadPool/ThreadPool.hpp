@@ -22,7 +22,7 @@ public:
             throw std::invalid_argument("thread_num must be > 0");
         }
         pthread_mutex_init(&mutex_, nullptr); // 保护任务队列与 stop_ 状态
-        pthread_cond_init(&cond_, nullptr);   // 队列为空时阻塞工作线程
+        pthread_cond_init(&cond_, nullptr);   // 任务队列为空时阻塞工作线程
         try
         {
             threads_.resize(thread_num);
