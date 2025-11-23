@@ -113,21 +113,23 @@ private:
     {
         while (true)
         {
-            Task task;
+            Task task;  //临时变量各个线程独有
             pthread_mutex_lock(&mutex_);
             while (!stop_ && tasks_.empty())  // 如果线程池没有停止,并且队列为空,则阻塞等待
             {
-                pthread_cond_wait(&cond_, &mutex_); // 队列空时阻塞，自动释放锁
+                pthread_cond_wait(&cond_, &mutex_); // 等待时自动释放锁，被唤醒时自动重新获取锁
             }
-            if (stop_ && tasks_.empty()) // 如果线程池已经停止,并且队列为空,则退出线程
+            // 从等待中唤醒：要么线程池停止，要么有任务到来
+            // 如果线程池已停止，退出线程；否则说明有任务到来，继续执行
+            if (stop_) // 线程池已停止，退出线程
             {
-                pthread_mutex_unlock(&mutex_);
+                pthread_mutex_unlock(&mutex_); // 释放锁后退出
                 break;
             }
-            // 如果线程池没有停止,并且队列不为空,则取出任务
+            // 线程池未停止，说明有任务到来，取出任务执行
             task = std::move(tasks_.front());
             tasks_.pop();
-            pthread_mutex_unlock(&mutex_);
+            pthread_mutex_unlock(&mutex_); // 必须释放锁：1) 让其他线程可以访问队列 2) 执行任务时不应持有锁
 
             try
             {
