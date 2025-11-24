@@ -1,14 +1,14 @@
 // 快速使用一下pthread库
-#include <iostream>
-#include <thread>
-#include <vector>
-#include <cstdio>
-#include <pthread.h>
-#include <unistd.h>
-#include <string.h>
-#include "LockGuard.hpp"
+// #include <iostream>
+// #include <thread>
+// #include <vector>
+// #include <cstdio>
+// #include <pthread.h>
+// #include <unistd.h>
+// #include <string.h>
+// #include "LockGuard.hpp"
 
-#define NUM 5
+// #define NUM 5
 
 // int g_val = 0;
 // void show(const std::string& name)
@@ -238,3 +238,73 @@
 
 //     return 0;
 // }
+
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
+constexpr int kMax = 20;
+
+int current = 1;
+bool turn_is_odd = true; // true: 该奇数线程打印；false: 偶数线程打印
+std::mutex mtx;
+std::condition_variable cv;
+
+void print_odd()
+{
+    while (true)
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        while (!turn_is_odd)
+        {
+            cv.wait(lock);
+        }
+
+        if (current > kMax)
+        {
+            turn_is_odd = false;  // 让偶数线程也能退出
+            cv.notify_one();
+            break;
+        }
+
+        std::cout << "Odd thread: " << current << std::endl;
+        ++current;
+        turn_is_odd = false;
+        cv.notify_one();
+    }
+}
+
+void print_even()
+{
+    while (true)
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        while (turn_is_odd)
+        {
+            cv.wait(lock);
+        }
+
+        if (current > kMax)
+        {
+            turn_is_odd = true;  // 让奇数线程也能退出
+            cv.notify_one();
+            break;
+        }
+
+        std::cout << "Even thread: " << current << std::endl;
+        ++current;
+        turn_is_odd = true;
+        cv.notify_one();
+    }
+}
+
+int main()
+{
+    std::thread odd(print_odd);
+    std::thread even(print_even);
+
+    odd.join();
+    even.join();
+    return 0;
+}

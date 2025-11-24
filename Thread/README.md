@@ -65,8 +65,82 @@ Linux中，尊重先描述，再组织。但是没规定必须用新的数据结
 
 CPU内部的CR3寄存器，直接指向页目录。CR2引起缺页中断的异常虚拟地址，缺页中断后需要重新申请内存啥的，CR2就是保存中断位置，以便于下次访问。
 
-**2. 物理内存**
+**2. 物理内存与存储层次**
+
+**物理内存（RAM）的定义：**
 物理内存，被分为4kb的大小内存块的，叫做页框/页帧（实际RAM中的存储块Page Frame）。`4kb = 2 * 2 ^ 10`
+
+**重要澄清：物理内存 ≠ 所有存储设备**
+
+物理内存（RAM）只是计算机存储层次结构中的一部分，不包括：
+- ❌ **寄存器**：CPU内部的存储单元，速度最快，容量最小
+- ❌ **高速缓存（Cache）**：CPU和内存之间的缓存，速度介于寄存器和内存之间
+- ❌ **磁盘**：外部存储设备，速度最慢，容量最大
+
+**计算机存储层次结构（从快到慢，从小到大）：**
+
+```
+1. 寄存器（Register）
+   - 位置：CPU内部
+   - 速度：最快（1个CPU周期）
+   - 容量：最小（几十到几百字节）
+   - 用途：存储当前正在处理的数据
+
+2. L1 Cache（一级缓存）
+   - 位置：CPU内部
+   - 速度：1-2 CPU周期
+   - 容量：32KB - 64KB
+   - 用途：存储最近访问的指令和数据
+
+3. L2 Cache（二级缓存）
+   - 位置：CPU内部或CPU附近
+   - 速度：10-20 CPU周期
+   - 容量：256KB - 512KB
+   - 用途：存储较常用的数据
+
+4. L3 Cache（三级缓存）
+   - 位置：CPU内部或CPU附近
+   - 速度：40-75 CPU周期
+   - 容量：几MB到几十MB
+   - 用途：存储多个核心共享的数据
+
+5. 物理内存（RAM）
+   - 位置：主板上的内存条
+   - 速度：100-300 CPU周期
+   - 容量：几GB到几十GB
+   - 用途：存储程序和数据（这是"物理内存"的真正含义）
+
+6. 磁盘（Disk/SSD）
+   - 位置：外部存储设备
+   - 速度：最慢（几万到几十万CPU周期）
+   - 容量：最大（几百GB到几TB）
+   - 用途：长期存储数据
+```
+
+**关键理解：**
+
+1. **物理内存特指RAM**：物理内存就是主板上的内存条（RAM），不包括寄存器、Cache和磁盘
+
+2. **存储层次的作用**：
+   - 寄存器 → Cache → 内存 → 磁盘，形成多级存储体系
+   - 速度快的容量小，速度慢的容量大
+   - 通过缓存机制，让CPU大部分时间访问快速存储
+
+3. **为什么需要多级存储？**
+   - CPU速度极快（GHz级别）
+   - 内存速度相对较慢（需要100-300周期）
+   - 通过Cache缓存热点数据，提高访问速度
+
+**关于CPU：**
+
+**CPU（Central Processing Unit，中央处理器）**：
+- ✅ 是的，CPU就是中央处理器的英文缩写
+- CPU是计算机的核心部件，负责执行指令和处理数据
+- CPU包含：
+  - **运算器（ALU）**：执行算术和逻辑运算
+  - **控制器（CU）**：控制指令执行流程
+  - **寄存器**：存储临时数据
+  - **Cache**：高速缓存
 
 **重要概念：虚拟地址空间 vs 物理内存**
 
@@ -80,6 +154,80 @@ CPU内部的CR3寄存器，直接指向页目录。CR2引起缺页中断的异�
    - 但物理内存只有一块（例如：8GB的RAM），所有进程共用
 
 2. **虚拟地址通过页表映射到物理内存**
+
+---
+
+### 什么是页表？为什么要有页表？
+
+**页表的定义：**
+
+页表（Page Table）是操作系统用来将虚拟地址映射到物理地址的查找表。它是虚拟内存管理的核心数据结构。
+
+**为什么需要页表？**
+
+#### 1. 解决内存管理的基本问题
+
+**问题：如果没有页表会怎样？**
+
+假设没有页表，程序直接使用物理地址：
+
+```
+程序A：使用物理地址 0x1000
+程序B：使用物理地址 0x1000  ← 冲突！两个程序访问同一块内存
+```
+
+**问题：**
+- ❌ 多个程序无法同时运行（地址冲突）
+- ❌ 程序必须知道物理内存布局（不现实）
+- ❌ 无法实现内存保护（一个程序可能破坏另一个程序的数据）
+- ❌ 无法实现虚拟内存（无法将不常用的数据换出到磁盘）
+
+#### 2. 实现虚拟内存的核心机制
+
+**虚拟内存的好处：**
+
+```
+每个进程看到的地址空间：
+进程A：0x00000000 ~ 0xFFFFFFFF (4GB虚拟地址)
+进程B：0x00000000 ~ 0xFFFFFFFF (4GB虚拟地址)
+进程C：0x00000000 ~ 0xFFFFFFFF (4GB虚拟地址)
+
+实际物理内存：只有 8GB RAM
+
+页表的作用：将每个进程的虚拟地址映射到不同的物理地址
+```
+
+**通过页表实现：**
+- ✅ **进程隔离**：每个进程有独立的虚拟地址空间
+- ✅ **内存保护**：可以设置页的读写权限
+- ✅ **按需分配**：只分配实际使用的物理内存
+- ✅ **内存共享**：多个进程可以共享同一块物理内存（如共享库）
+
+#### 3. 为什么不能直接映射每个字节？
+
+**如果为每个字节建立映射：**
+
+```
+32位系统：4GB 虚拟地址空间 = 4,294,967,296 字节
+每个映射条目需要：8字节（32位虚拟地址 + 32位物理地址）
+总大小 = 4,294,967,296 × 8 = 32GB
+
+问题：页表本身就需要 32GB 内存！这比实际物理内存还大！
+```
+
+**解决方案：分页（Paging）**
+
+
+将内存分成固定大小的页（Page）：
+- 每页大小：4KB
+- 页数：4GB / 4KB = 1,048,576 页
+- 每个页表项：4字节
+- 单级页表大小：1,048,576 × 4 = 4MB
+
+进一步优化：使用两级页表
+- 页目录：4KB（必须）
+- 页表：按需分配，大多数进程只用几个页表
+- 总大小：4KB + N × 4KB（N通常很小，如3-5个）
    ```
    进程A的虚拟地址 0x08048000 → 页表转换 → 物理地址 0x12345000
    进程B的虚拟地址 0x08048000 → 页表转换 → 物理地址 0x56789000
@@ -383,6 +531,191 @@ t6   访问页5        [3:0x3000, 4:0x4000, 1:0x1000, 5:0x5000]  (淘汰页2)
 1. **硬件LRU**：CPU硬件实现的LRU，速度极快
 2. **软件LRU**：操作系统实现的LRU，灵活性更高
 3. **伪LRU（PLRU）**：硬件优化的近似LRU算法，节省硬件成本
+
+---
+
+### LRU Cache 完整实现示例
+
+下面是一个完整的 LRU Cache 实现，使用双向链表 + 哈希表实现 O(1) 时间复杂度的操作：
+
+```cpp
+#include <iostream>
+#include <list>
+#include <unordered_map>
+
+class LRUCache {
+private:
+    
+    std::list<std::pair<int, int>> cache; // 双向链表：存储键值对，按访问时间排序（头部最新，尾部最久）
+    std::unordered_map<int, std::list<std::pair<int, int>>::iterator> map; // 哈希表：key -> 指向链表中对应节点的迭代器
+    int cap;  // 缓存容量
+
+public:
+    // 构造函数：初始化容量
+    LRUCache(int capacity) : cap(capacity) {
+    }
+
+    // 获取键对应的值
+    // 时间复杂度：O(1)
+    int get(int key) {
+        // 1. 检查 key 是否存在
+        if (map.count(key) > 0) {
+            // 2. 获取键值对
+            auto it = map[key];
+            auto temp = *it;
+            
+            // 3. 从链表中删除原位置
+            cache.erase(it);
+            
+            // 4. 插入到链表头部（标记为最新使用）
+            cache.push_front(temp);
+            
+            // 5. 更新哈希表，指向新的位置
+            map[key] = cache.begin();
+            
+            // 6. 返回值
+            return temp.second;
+        }
+        return -1;  // key 不存在
+    }
+
+    // 插入或更新键值对
+    // 时间复杂度：O(1)
+    void put(int key, int value) {
+        // 情况1：key 已存在（更新操作）
+        if (map.count(key) > 0) {
+            // 删除旧位置
+            cache.erase(map[key]);
+            map.erase(key);
+        }
+        // 情况2：key 不存在且缓存已满
+        else if (cap == cache.size()) {
+            // 获取最久未使用的（链表尾部）
+            auto temp = cache.back();
+            // 从哈希表删除
+            map.erase(temp.first);
+            // 删除链表尾部节点（LRU 淘汰）
+            cache.pop_back();
+        }
+        // 情况3：key 不存在且缓存未满，直接插入
+        
+        // 插入到链表头部
+        cache.push_front(std::make_pair(key, value));
+        // 更新哈希表，指向新节点
+        map[key] = cache.begin();
+    }
+
+    // 打印当前缓存状态（用于调试）
+    void print() {
+        std::cout << "Cache (最新 -> 最久): ";
+        for (const auto& p : cache) {
+            std::cout << "[" << p.first << ":" << p.second << "] ";
+        }
+        std::cout << std::endl;
+    }
+};
+
+// 使用示例
+int main() {
+    LRUCache cache(3);  // 容量为 3
+
+    std::cout << "=== LRU Cache 测试 ===" << std::endl;
+
+    // 插入操作
+    std::cout << "\n1. 插入 (1,100):" << std::endl;
+    cache.put(1, 100);
+    cache.print();
+
+    std::cout << "\n2. 插入 (2,200):" << std::endl;
+    cache.put(2, 200);
+    cache.print();
+
+    std::cout << "\n3. 插入 (3,300):" << std::endl;
+    cache.put(3, 300);
+    cache.print();
+
+    // 访问操作（会更新访问顺序）
+    std::cout << "\n4. 访问 key=2 (get(2)):" << std::endl;
+    int val = cache.get(2);
+    std::cout << "返回值: " << val << std::endl;
+    cache.print();  // 2 会移到头部
+
+    // 插入新元素，触发淘汰
+    std::cout << "\n5. 插入 (4,400) (缓存已满，会淘汰最久未使用的):" << std::endl;
+    cache.put(4, 400);
+    cache.print();  // 1 被淘汰（最久未使用）
+
+    // 更新已存在的 key
+    std::cout << "\n6. 更新 key=3 的值为 350:" << std::endl;
+    cache.put(3, 350);
+    cache.print();  // 3 会移到头部
+
+    // 访问不存在的 key
+    std::cout << "\n7. 访问 key=1 (已被淘汰):" << std::endl;
+    val = cache.get(1);
+    std::cout << "返回值: " << val << " (不存在返回 -1)" << std::endl;
+
+    return 0;
+}
+```
+
+**运行结果：**
+```
+=== LRU Cache 测试 ===
+
+1. 插入 (1,100):
+Cache (最新 -> 最久): [1:100] 
+
+2. 插入 (2,200):
+Cache (最新 -> 最久): [2:200] [1:100] 
+
+3. 插入 (3,300):
+Cache (最新 -> 最久): [3:300] [2:200] [1:100] 
+
+4. 访问 key=2 (get(2)):
+返回值: 200
+Cache (最新 -> 最久): [2:200] [3:300] [1:100] 
+
+5. 插入 (4,400) (缓存已满，会淘汰最久未使用的):
+Cache (最新 -> 最久): [4:400] [2:200] [3:300] 
+
+6. 更新 key=3 的值为 350:
+Cache (最新 -> 最久): [3:350] [4:400] [2:200] 
+
+7. 访问 key=1 (已被淘汰):
+返回值: -1 (不存在返回 -1)
+```
+
+### 实现要点
+
+1. **数据结构选择**：
+   - 双向链表：维护访问顺序，头部最新，尾部最久
+   - 哈希表：O(1) 快速定位链表节点
+
+2. **时间复杂度**：
+   - `get()`: O(1)
+   - `put()`: O(1)
+
+3. **空间复杂度**：O(capacity)
+
+4. **关键操作**：
+   - 访问时：将节点移到链表头部
+   - 淘汰时：删除链表尾部节点
+   - 更新时：删除旧节点，插入新节点到头部
+
+### 优化版本（使用 splice 避免删除重建）
+
+```cpp
+int get(int key) {
+    if (map.count(key) > 0) {
+        auto it = map[key];
+        // 使用 splice 将节点移到头部（更高效）
+        cache.splice(cache.begin(), cache, it);
+        return it->second;
+    }
+    return -1;
+}
+```
 
 **TLB缓存在进程/线程切换中的作用**
 
@@ -1573,7 +1906,41 @@ int main()
 
 ### 锁的原理
 
-原子性：一条汇编语句，就是原子的。
+**原子性的定义（教材标准定义）：**
+
+原子性（Atomicity）是指：**一个操作要么完全执行，要么完全不执行，不会出现中间状态**。从外部观察者的角度看，原子操作是不可分割的。
+
+**关键理解：**
+
+1. **一条汇编指令的执行过程**
+   - 一条汇编指令在CPU内部可能包含多个微操作（micro-operations）
+   - 例如：`xchgb %al, mutex` 可能包括：读取内存 → 交换值 → 写回内存
+   - **指令执行过程中可能被中断或线程切换**
+
+2. **原子性 ≠ 不可中断**
+   - 原子性不是指指令执行过程中不能被中断
+   - 而是指：**即使被中断，从外部观察者的角度看，操作仍然是不可分割的**
+   - 硬件保证：即使指令执行过程中发生中断，其他线程也看不到"部分完成"的状态
+
+3. **xchgb指令是原子的吗？**
+   - **是的**，`xchgb`在x86架构中是原子指令
+   - 原因：硬件在总线级别保证了该指令的原子性
+   - 即使执行过程中发生中断，硬件会确保：
+     - 要么整个交换操作完成（mutex和al都更新）
+     - 要么整个操作都不发生（保持原值）
+   - 其他线程**永远看不到**"只读了一半"或"只写了一半"的中间状态
+
+4. **为什么普通指令不是原子的？**
+   ```asm
+   ; 普通指令：可能暴露中间状态
+   mov %eax, mutex    ; 如果这是64位值，可能需要多次内存访问
+   ; 如果在这条指令执行过程中被切换，其他线程可能看到部分更新的值
+   ```
+
+**总结：**
+- 原子性 = 从外部观察不可分割，不会暴露中间状态
+- 一条汇编指令可能包含多个操作，执行过程中可能被切换
+- 但原子指令由硬件保证：即使被切换，也不会暴露中间状态给其他线程
 
 那么锁到底是怎样实现原子的呢？
 
@@ -2027,6 +2394,257 @@ int sem_post(sem_t *sem);  // V()
 2. 打开文件，inode数据块，是不是直接就加载到内存里呢？
 
 好处，启动加载更快；
+
+### 代码示例
+
+#### 1. 饿汉模式（线程安全，程序启动时创建）
+
+```cpp
+#include <iostream>
+#include <pthread.h>
+
+class Singleton {
+public:
+    // 获取单例对象
+    static Singleton* getInstance() {
+        return &instance_;  // 直接返回，线程安全
+    }
+
+    void show() {
+        std::cout << "Singleton instance address: " << this << std::endl;
+    }
+
+private:
+    // 私有构造函数，防止外部创建
+    Singleton() {
+        std::cout << "Singleton created (饿汉模式)" << std::endl;
+    }
+
+    // 禁止拷贝构造和赋值
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+    // 静态成员变量，程序启动时自动创建
+    static Singleton instance_;
+};
+
+// 在类外定义静态成员（程序启动时创建，线程安全）
+Singleton Singleton::instance_;
+
+// 使用示例
+void* thread_func(void* arg) {
+    Singleton* s = Singleton::getInstance();
+    s->show();
+    return nullptr;
+}
+
+int main() {
+    pthread_t t1, t2, t3;
+    pthread_create(&t1, nullptr, thread_func, nullptr);
+    pthread_create(&t2, nullptr, thread_func, nullptr);
+    pthread_create(&t3, nullptr, thread_func, nullptr);
+
+    pthread_join(t1, nullptr);
+    pthread_join(t2, nullptr);
+    pthread_join(t3, nullptr);
+
+    return 0;
+}
+```
+
+**特点：**
+- ✅ 线程安全：程序启动时创建，多线程访问无需加锁
+- ✅ 实现简单：不需要考虑线程同步
+- ❌ 启动慢：即使不使用也会创建
+- ❌ 无法延迟加载
+
+---
+
+#### 2. 懒汉模式 - 非线程安全版本（有问题）
+
+```cpp
+class Singleton {
+public:
+    static Singleton* getInstance() {
+        if (instance_ == nullptr) {  // ❌ 多线程下可能创建多个实例
+            instance_ = new Singleton();
+        }
+        return instance_;
+    }
+
+private:
+    Singleton() {}
+    static Singleton* instance_;
+};
+
+Singleton* Singleton::instance_ = nullptr;
+```
+
+**问题：** 多线程同时调用 `getInstance()` 时，可能创建多个实例。
+
+---
+
+#### 3. 懒汉模式 - 使用互斥锁（线程安全但性能较差）
+
+```cpp
+#include <pthread.h>
+
+class LockGuard {
+public:
+    LockGuard(pthread_mutex_t* lock) : lock_(lock) {
+        pthread_mutex_lock(lock_);
+    }
+    ~LockGuard() {
+        pthread_mutex_unlock(lock_);
+    }
+private:
+    pthread_mutex_t* lock_;
+};
+
+class Singleton {
+public:
+    static Singleton* getInstance() {
+        LockGuard lock(&mutex_);  // 加锁保护
+        if (instance_ == nullptr) {
+            instance_ = new Singleton();
+        }
+        return instance_;
+    }
+
+private:
+    Singleton() {
+        std::cout << "Singleton created (懒汉模式-互斥锁)" << std::endl;
+    }
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+    static Singleton* instance_;
+    static pthread_mutex_t mutex_;
+};
+
+Singleton* Singleton::instance_ = nullptr;
+pthread_mutex_t Singleton::mutex_ = PTHREAD_MUTEX_INITIALIZER;
+```
+
+**特点：**
+- ✅ 线程安全
+- ✅ 延迟加载
+- ❌ 性能差：每次调用都要加锁，即使实例已创建
+
+---
+
+#### 4. 懒汉模式 - 双重检查锁定（DCLP，推荐）
+
+```cpp
+#include <pthread.h>
+
+class LockGuard {
+public:
+    LockGuard(pthread_mutex_t* lock) : lock_(lock) {
+        pthread_mutex_lock(lock_);
+    }
+    ~LockGuard() {
+        pthread_mutex_unlock(lock_);
+    }
+private:
+    pthread_mutex_t* lock_;
+};
+
+class Singleton {
+public:
+    static Singleton* getInstance() {
+        // 第一次检查：如果已创建，直接返回（不加锁，性能好）
+        if (instance_ == nullptr) {
+            LockGuard lock(&mutex_);  // 加锁
+            // 第二次检查：防止多线程同时通过第一次检查
+            if (instance_ == nullptr) {
+                instance_ = new Singleton();
+            }
+        }
+        return instance_;
+    }
+
+private:
+    Singleton() {
+        std::cout << "Singleton created (懒汉模式-双重检查锁定)" << std::endl;
+    }
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+    static Singleton* instance_;
+    static pthread_mutex_t mutex_;
+};
+
+Singleton* Singleton::instance_ = nullptr;
+pthread_mutex_t Singleton::mutex_ = PTHREAD_MUTEX_INITIALIZER;
+```
+
+**特点：**
+- ✅ 线程安全
+- ✅ 延迟加载
+- ✅ 性能好：实例创建后，后续调用无需加锁
+
+**工作原理：**
+1. 第一次检查：如果 `instance_` 不为空，直接返回（无锁，快速）
+2. 如果为空，加锁进入临界区
+3. 第二次检查：再次检查是否为空（防止多线程同时通过第一次检查）
+4. 创建实例并返回
+
+---
+
+#### 5. C++11 局部静态变量版本（最推荐，C++11及以上）
+
+```cpp
+class Singleton {
+public:
+    static Singleton& getInstance() {
+        // C++11 保证局部静态变量初始化是线程安全的
+        static Singleton instance;  // 只初始化一次，线程安全
+        return instance;
+    }
+
+    void show() {
+        std::cout << "Singleton instance address: " << this << std::endl;
+    }
+
+private:
+    Singleton() {
+        std::cout << "Singleton created (C++11局部静态变量)" << std::endl;
+    }
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+};
+
+// 使用示例
+void* thread_func(void* arg) {
+    Singleton& s = Singleton::getInstance();
+    s.show();
+    return nullptr;
+}
+
+int main() {
+    pthread_t t1, t2, t3;
+    pthread_create(&t1, nullptr, thread_func, nullptr);
+    pthread_create(&t2, nullptr, thread_func, nullptr);
+    pthread_create(&t3, nullptr, thread_func, nullptr);
+
+    pthread_join(t1, nullptr);
+    pthread_join(t2, nullptr);
+    pthread_join(t3, nullptr);
+
+    return 0;
+}
+```
+
+**特点：**
+- ✅ 线程安全：C++11 标准保证局部静态变量初始化是线程安全的
+- ✅ 延迟加载：第一次调用时才创建
+- ✅ 代码简洁：无需手动管理锁和指针
+- ✅ 自动析构：程序结束时自动销毁
+- ✅ 推荐使用：C++11 及以上版本的最佳选择
+
+**注意：** C++11 之前，局部静态变量的初始化不是线程安全的，需要使用其他方法。
+
 
 ## 互斥锁
 
@@ -2755,3 +3373,330 @@ sem_post(&sem);                    // 信号量加1，唤醒等待线程
 - **信号量**：`init`初始化，`wait`是P操作（申请），`post`是V操作（释放），`destroy`销毁
 - **读写锁**：`init`初始化，`rdlock`读加锁，`wrlock`写加锁，`unlock`解锁，`destroy`销毁
 - **自旋锁**：`init`初始化，`lock`自旋加锁，`trylock`尝试加锁，`unlock`解锁，`destroy`销毁
+
+
+## C++11线程库学习
+
+<pthread.h> 什么系统在使用：Unix、Linux、Mac OS X。Windows上标准库需要网上查。所以C++11之前被吐槽很久
+
+C++11的<thread>库，通过条件编译处理了平台不同，线程库不兼容的问题
+
+```cpp
+// 标准库内部类似的条件编译处理（简化示例）
+#ifdef _WIN32
+    // Windows平台使用Windows线程API
+    #include <windows.h>
+    typedef HANDLE native_handle_type;
+#elif defined(__unix__) || defined(__APPLE__)
+    // Unix/Linux/Mac平台使用pthread
+    #include <pthread.h>
+    typedef pthread_t native_handle_type;
+#endif
+
+// 统一的C++11接口
+#include <thread>
+std::thread t(func);  // 用户代码无需关心底层实现
+```
+
+### 一、std::thread 线程管理
+1. **线程创建**
+
+   std::thread提供了多种构造函数来创建线程：
+
+   ![std::thread构造函数](png/image11.png)
+
+   - **默认构造函数 (1)**: `thread() noexcept` - 创建一个不表示任何执行线程的thread对象
+   - **初始化构造函数 (2)**: `template <class Fn, class... Args> explicit thread (Fn&& fn, Args&&... args)` - 创建并启动新线程，接受可调用对象和参数
+   - **拷贝构造函数 (3)**: `thread (const thread&) = delete` - 已删除，thread对象不可拷贝
+   - **移动构造函数 (4)**: `thread (thread&& x) noexcept` - 移动构造，转移线程所有权
+
+2. **线程操作**
+   - `join()` - 等待线程结束
+   - `detach()` - 分离线程
+   - `joinable()` - 检查是否可join
+   - `get_id()` - 获取线程ID
+
+3. **线程生命周期管理**
+   - 线程对象移动语义
+   - 线程析构行为
+   - 异常安全处理
+
+### 二、互斥锁 (Mutex)
+1. **std::mutex**
+   - 基本互斥锁
+   - `lock()` / `unlock()`
+   - `try_lock()` - 尝试加锁，不阻塞，立即返回
+   - `std::this_thread::yield()` - 让出CPU时间片
+
+   **`std::this_thread::yield()` 详解：**
+   
+   ```cpp
+   #include <thread>
+   
+   void function() {
+       while (!try_lock()) {
+           std::this_thread::yield();  // 让出CPU，让其他线程运行
+       }
+       // 成功获取锁
+   }
+   ```
+   
+   **功能：**
+   - 主动让出当前线程的CPU时间片
+   - 提示调度器可以运行其他线程
+   - 不阻塞，立即返回
+   - 常用于自旋锁（spinlock）中，避免CPU空转
+   
+   **与 `try_lock()` 配合使用：**
+   ```cpp
+   std::mutex mtx;
+   
+   // 自旋锁模式：不断尝试获取锁
+   while (!mtx.try_lock()) {
+       std::this_thread::yield();  // 让出CPU，避免浪费CPU周期
+   }
+   // 成功获取锁
+   ```
+
+2. **std::recursive_mutex**
+   - 递归互斥锁
+   - 同一线程可多次加锁
+
+3. **std::timed_mutex**
+   - 带超时的互斥锁
+   - `try_lock_for()` / `try_lock_until()`
+
+4. **std::shared_mutex (C++17)**
+   - 读写锁
+   - 共享锁和独占锁
+
+### 三、锁管理器 (Lock Guards)
+1. **std::lock_guard**
+   - RAII自动加锁/解锁
+   - 基本用法
+
+2. **std::unique_lock**
+   - 更灵活的锁管理
+   - 延迟加锁
+   - 条件变量配合使用
+
+3. **std::scoped_lock (C++17)**
+   - 多锁同时加锁
+   - 避免死锁
+
+4. **std::shared_lock (C++17)**
+   - 共享锁管理
+
+### 四、条件变量 (Condition Variable)
+1. **std::condition_variable**
+   - `wait()` - 等待条件
+   - `notify_one()` - 唤醒一个线程
+   - `notify_all()` - 唤醒所有线程
+   - 虚假唤醒问题
+
+2. **std::condition_variable_any**
+   - 可与任何锁类型配合
+
+3. **生产者-消费者模式**
+   - 阻塞队列实现
+   - 线程间通信
+
+### 五、原子操作 (Atomic)
+1. **std::atomic 基础**
+   - 原子类型定义
+   - 基本操作：`load()`, `store()`, `exchange()`
+   - 原子性保证
+
+   ```cpp
+   #include <atomic>
+   #include <thread>
+   #include <iostream>
+   
+   std::atomic<int> counter{0};  // 原子整型
+   
+   void increment() {
+       for (int i = 0; i < 100000; ++i) {
+           counter++;  // 原子操作，线程安全
+       }
+   }
+   
+   int main() {
+       std::thread t1(increment);
+       std::thread t2(increment);
+       
+       t1.join();
+       t2.join();
+       
+       std::cout << "Counter: " << counter << std::endl;  // 200000
+       return 0;
+   }
+   ```
+
+2. **原子操作类型**
+   - `std::atomic<int>`, `std::atomic<bool>` 等基本类型
+   - `std::atomic_flag` - 无锁标志位
+   - 自定义类型的原子操作（需要满足特定条件）
+
+   ```cpp
+   // 基本原子类型
+   std::atomic<int> a{0};
+   std::atomic<bool> flag{false};
+   std::atomic<long> l{100};
+   
+   // 原子标志（最轻量级的原子操作）
+   std::atomic_flag spin_lock = ATOMIC_FLAG_INIT;
+   
+   // 自旋锁实现
+   void lock() {
+       while (spin_lock.test_and_set(std::memory_order_acquire)) {
+           // 自旋等待
+       }
+   }
+   
+   void unlock() {
+       spin_lock.clear(std::memory_order_release);
+   }
+   ```
+
+3. **原子操作函数**
+   - `load()` - 读取值
+   - `store()` - 写入值
+   - `exchange()` - 交换值
+   - `compare_exchange_weak()` / `compare_exchange_strong()` - 比较并交换（CAS）
+
+   ```cpp
+   std::atomic<int> value{10};
+   
+   // 读取
+   int x = value.load();           // 显式读取
+   int y = value;                   // 隐式读取（等价于load()）
+   
+   // 写入
+   value.store(20);                 // 显式写入
+   value = 20;                      // 隐式写入（等价于store()）
+   
+   // 交换
+   int old = value.exchange(30);    // 返回旧值，设置新值
+   // value 现在是 30，old 是 20
+   
+   // 比较并交换（CAS）
+   int expected = 30;
+   bool success = value.compare_exchange_weak(
+       expected,    // 期望的值（如果匹配，会被修改）
+       40          // 新值
+   );
+   // 如果 value == 30，则 value = 40，返回 true
+   // 否则 expected = value，返回 false
+   ```
+
+4. **原子算术操作**
+   - `fetch_add()`, `fetch_sub()` - 原子加减
+   - `fetch_and()`, `fetch_or()`, `fetch_xor()` - 原子位运算
+   - `++`, `--`, `+=`, `-=` 等运算符重载
+
+   ```cpp
+   std::atomic<int> count{0};
+   
+   // 原子加法
+   int old1 = count.fetch_add(5);  // count += 5，返回旧值
+   count += 3;                      // 等价于 fetch_add(3)
+   ++count;                         // 等价于 fetch_add(1)
+   
+   // 原子减法
+   int old2 = count.fetch_sub(2);   // count -= 2，返回旧值
+   count -= 1;                      // 等价于 fetch_sub(1)
+   --count;                         // 等价于 fetch_sub(1)
+   
+   // 原子位运算
+   std::atomic<int> flags{0};
+   flags.fetch_and(0xFF);           // flags &= 0xFF
+   flags.fetch_or(0x01);             // flags |= 0x01
+   flags.fetch_xor(0x10);           // flags ^= 0x10
+   ```
+
+5. **内存序 (Memory Order)**
+   - `memory_order_relaxed` - 最宽松，只保证原子性
+   - `memory_order_acquire` - 获取语义，保证后续读操作不会被重排到前面
+   - `memory_order_release` - 释放语义，保证前面的写操作不会被重排到后面
+   - `memory_order_acq_rel` - 获取-释放语义
+   - `memory_order_seq_cst` - 顺序一致性（默认，最严格）
+
+   ```cpp
+   std::atomic<bool> ready{false};
+   std::atomic<int> data{0};
+   
+   // 线程1：生产者
+   void producer() {
+       data.store(42, std::memory_order_relaxed);
+       ready.store(true, std::memory_order_release);  // 释放：前面的写操作完成
+   }
+   
+   // 线程2：消费者
+   void consumer() {
+       while (!ready.load(std::memory_order_acquire)) {  // 获取：等待释放
+           std::this_thread::yield();
+       }
+       int value = data.load(std::memory_order_relaxed);
+       // 保证看到 data = 42
+   }
+   ```
+
+6. **原子操作 vs 互斥锁**
+   - **原子操作**：无锁编程，性能高，但只能保护单个变量
+   - **互斥锁**：可以保护临界区，但可能有阻塞开销
+
+   ```cpp
+   // 方式1：使用互斥锁（适合保护复杂操作）
+   std::mutex mtx;
+   int counter = 0;
+   
+   void increment_with_lock() {
+       std::lock_guard<std::mutex> lock(mtx);
+       counter++;  // 可以保护复杂的操作
+   }
+   
+   // 方式2：使用原子操作（适合简单操作）
+   std::atomic<int> atomic_counter{0};
+   
+   void increment_atomic() {
+       atomic_counter++;  // 无锁，性能更好
+   }
+   
+   // 性能对比：原子操作通常比互斥锁快
+   ```
+
+7. **实际应用场景**
+   - 计数器、标志位
+   - 无锁数据结构（无锁队列、无锁栈）
+   - 自旋锁实现
+   - 单次初始化（once_flag）
+
+   ```cpp
+   // 示例：无锁计数器
+   class ThreadSafeCounter {
+   private:
+       std::atomic<int> count_{0};
+   
+   public:
+       void increment() {
+           count_.fetch_add(1, std::memory_order_relaxed);
+       }
+       
+       int get() const {
+           return count_.load(std::memory_order_relaxed);
+       }
+   };
+   
+   // 示例：单次初始化
+   std::atomic<bool> initialized{false};
+   void init_once() {
+       bool expected = false;
+       if (initialized.compare_exchange_weak(expected, true)) {
+           // 只有第一个线程会执行这里
+           std::cout << "Initializing..." << std::endl;
+       }
+   }
+   ```
+
+8. **无锁编程实战：链表尾插（CAS实现）伪代码**
+

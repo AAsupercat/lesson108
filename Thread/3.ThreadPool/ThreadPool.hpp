@@ -73,7 +73,7 @@ public:
         }
         tasks_.push(std::move(task));   // 将任务压入队列,这里使用std::move是因为task是一个右值引用,可以避免拷贝构造
         pthread_mutex_unlock(&mutex_);
-        pthread_cond_signal(&cond_); // 唤醒一个等待线程去执行任务
+        pthread_cond_signal(&cond_); // 唤醒一个等待线程去执行任务，当没有等待线程时，唤醒不会报错
     }
 
     // 主动关闭线程池（示例中 main 也会调用）
