@@ -369,3 +369,47 @@ public:
 };
 ```
 
+## 链表
+
+### LRU
+
+```cpp
+class LRUCache {
+public:
+    LRUCache(int capacity) : capacity_(capacity) {}
+
+    int get(int key) {
+        if (map.count(key) > 0) {
+            // 删除Cache原本内容
+            auto temp = *map[key];
+            cache.erase(map[key]);
+            cache.push_front(temp);
+            map[key] = cache.begin();
+            return temp.second;
+        }
+        return -1;
+    }
+
+    void put(int key, int value) {
+        if (map.count(key) > 0) {
+            // 如果已经存在，就删除原本的值
+            cache.erase(map[key]);
+        } else {
+            // 不存在，但是容量满了，需要删除尾部的值,还要更新map
+            if (cache.size() == capacity_) {
+                auto temp = cache.back();
+                cache.pop_back();
+                map.erase(temp.first);
+            }
+        }
+        auto temp = make_pair(key, value);
+        cache.push_front(temp);
+        map[key] = cache.begin();
+    }
+
+private:
+    int capacity_;
+    list<pair<int, int>> cache; // 头部记录最新的数据
+    unordered_map<int, list<pair<int, int>>::iterator> map;
+};
+```
