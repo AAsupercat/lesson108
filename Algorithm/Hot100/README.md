@@ -369,6 +369,127 @@ public:
 };
 ```
 
+## 普通数组
+### 最大子数组和
+```cpp
+class Solution {
+public:
+    int maxSubArray(vector<int>& nums) {
+        //峰：peak 谷：valley
+        //前缀和，sum是个折线，用最高值减去最低值，就是子序列最大值
+        int ret=INT_MIN;
+        int sum=0,valley=0;//valley标记波谷
+        for(int num:nums) 
+        {
+        	sum+=num;
+        	ret=max(ret, sum-valley);
+        	valley=min(valley, sum);
+        }
+        return ret;
+    }
+};
+```
+
+### 合并区间
+```cpp
+class Solution {
+public:
+    vector<vector<int>> merge(vector<vector<int>>& intervals) {
+        // 按区间起始位置排序
+        sort(intervals.begin(), intervals.end());//vector重载了'<'
+        vector<vector<int>> ret;
+        for (auto& interval : intervals) {
+            // 如果结果为空，或者当前区间与结果中最后一个区间不重叠
+            if (ret.empty() || ret.back()[1] < interval[0]) {
+                ret.push_back(interval);
+            } else {
+                // 重叠：合并区间，更新右端点
+                ret.back()[1] = max(ret.back()[1], interval[1]);
+            }
+        }
+        return ret;
+    }
+};
+```
+
+### 轮转数组
+```cpp
+class Solution {
+public:
+    void rotate(vector<int>& nums, int k) {
+        int n = nums.size();
+        k = k % n;  // 处理k大于n的情况
+        
+        // 反转整个数组
+        reverse(nums.begin(), nums.end());
+        // 反转前k个元素
+        reverse(nums.begin(), nums.begin() + k);
+        // 反转后n-k个元素
+        reverse(nums.begin() + k, nums.end());
+    }
+};
+```
+
+### 除自身以外数组的乘积
+```cpp
+class Solution {
+public:
+    vector<int> productExceptSelf(vector<int>& nums) {
+        int n = nums.size();
+        vector<int> ans(n, 1);
+        // 第一遍：从左到右，计算前缀积
+        int prefix = 1;
+        for (int i = 0; i < n - 1; i++) {
+            prefix *= nums[i];
+            ans[i + 1] = prefix;  // 前缀积存到下一个位置
+        }
+        // 第二遍：从右到左，计算后缀积并相乘
+        int suffix = 1;
+        for (int i = n - 1; i > 0; i--) {
+            suffix *= nums[i];
+            ans[i - 1] *= suffix;  // 后缀积乘到前一个位置
+        }
+        return ans;
+    }
+};
+
+```
+
+### 缺失的第一个正数
+```cpp
+class Solution {
+public:
+    int firstMissingPositive(vector<int>& nums) {
+        int n = nums.size();
+        
+        // 原地哈希：将每个数字放到它应该在的位置
+        for (int i = 0; i < n; i++) {
+            while (nums[i] > 0 && nums[i] < n) 
+            {  // 修正：应该是 <= n
+                int to = nums[i] - 1;
+                if (nums[to] == nums[i]) 
+                {
+                    break;  // 已经在正确位置，避免无限循环
+                }
+                swap(nums[to], nums[i]);
+            }
+        }      
+        // 查找第一个不在正确位置的数字
+        for (int i = 0; i < n; i++) 
+        {
+            if (nums[i] != i + 1) 
+            {
+                return i + 1;
+            }
+        }
+        
+        return n + 1;
+    }
+};
+```
+
+## 矩阵
+
 ## 链表
 
 ### LRU
@@ -413,3 +534,114 @@ private:
     unordered_map<int, list<pair<int, int>>::iterator> map;
 };
 ```
+## 二叉树
+## 图论
+## 回溯
+
+## 二分查找
+## 栈
+## 堆
+
+## 贪心算法
+
+### 买卖股票的最佳时机
+```cpp
+class Solution {
+public:
+    int maxProfit(vector<int>& prices) 
+    {
+        int ret=0;
+        for(int i=0,prevMin=INT_MAX;i<prices.size();i++)
+        {
+            ret=max(ret,prices[i]-prevMin);
+            prevMin=min(prevMin,prices[i]);
+        }
+        return ret;
+    }
+};
+```
+
+### 跳跃游戏2
+```cpp
+class Solution {
+public:
+    int jump(vector<int>& nums) 
+    {
+        //贪心算法+双指针：记录当前区间能跳的最远距离，当最远超过范围就结束
+        //类似层序遍历的思想，left永远是新区间的起始，right永远是新区间的结束。
+        int left=0,right=0,ret=0,maxpos=0;
+        while(right<nums.size()-1)
+        {
+            while(left<=right)  //查看当前区间能最多能跳多远
+            {
+                maxpos=max(maxpos,left+nums[left]); 
+                left++;
+            }
+            right=maxpos;
+            ret++;
+        }
+        return ret;
+    }
+};
+```
+
+### 跳跃游戏1
+```cpp
+class Solution {
+public:
+    bool canJump(vector<int>& nums) 
+    {
+        int left=0,right=0,maxpos=0;
+        while(right<nums.size()-1)
+        {
+            while(left<=right)
+            {
+                maxpos=max(maxpos,nums[left]+left);
+                left++;
+            }
+            if(maxpos==right) return false;
+            right=maxpos;
+        }
+        return true;
+    }
+};
+```
+
+### 划分字母区间
+
+```cpp
+class Solution {
+public:
+    vector<int> partitionLabels(string s) {
+        // 1. 优先记录每个字母最后出现的下标
+        int last[26]={0};
+        int len = s.size();
+        for (int i = 0; i < len; i++) 
+            last[s[i] - 'a'] = i; // 记录字母最晚出现的下标
+        // 2. 初始化left为划分区间开始位置，right为当前位置的最右值
+        vector<int> ret;
+        int left = 0, right = 0;
+        while (left<len) //当left=len，表示划分完毕，right==len-1；
+        {
+            int begin = left;
+            right = last[s[left] - 'a'];
+            //遍历当前区间，看right是不是区间内的最右值
+            while (left <= right) 
+            {
+                right = max(right, last[s[left] - 'a']);
+                left++;
+            }
+            //此时left在下一个需要划分的位置，right=left-1；
+            ret.push_back(left - begin);
+        }
+        return ret;
+    }
+};
+
+```
+
+## 动态规划
+
+## 多维动态规划
+
+## 技巧

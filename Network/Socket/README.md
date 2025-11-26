@@ -162,9 +162,6 @@ INADDR_ANY       // 0.0.0.0，监听所有网卡
 INADDR_LOOPBACK  // 127.0.0.1，本地回环
 INADDR_BROADCAST // 255.255.255.255，广播地址
 
-// 缓冲区大小常量
-INET_ADDRSTRLEN   // 16，IPv4地址字符串最大长度
-INET6_ADDRSTRLEN  // 46，IPv6地址字符串最大长度
 ```
 
 ## 套接字结构体种类
@@ -392,7 +389,88 @@ int close(int fd);
 
 **功能：** 关闭套接字，释放资源
 
-### 2. TCP服务器和客户端流程
+### 2. UDP服务器和客户端流程
+
+#### UDP服务器端流程：
+
+```c
+// 1. 创建套接字
+int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+// 2. 设置套接字选项（可选）
+int opt = 1;
+setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+// 3. 绑定地址（必须）
+struct sockaddr_in server_addr;
+memset(&server_addr, 0, sizeof(server_addr));
+server_addr.sin_family = AF_INET;
+server_addr.sin_port = htons(8080);
+server_addr.sin_addr.s_addr = INADDR_ANY;  // 监听所有网卡
+bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+
+// 4. 接收和发送数据（循环）
+while (1) {
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    char buffer[1024];
+    
+    // 接收数据（阻塞等待，获取客户端地址）
+    ssize_t n = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
+                         (struct sockaddr*)&client_addr, &client_len);
+    if (n > 0) {
+        buffer[n] = '\0';
+        
+        // 处理数据...
+        printf("Received from client: %s\n", buffer);
+        
+        // 发送数据回客户端（使用接收到的客户端地址）
+        sendto(sockfd, buffer, n, 0,
+               (struct sockaddr*)&client_addr, client_len);
+    }
+}
+
+// 5. 关闭套接字
+close(sockfd);
+```
+
+#### UDP客户端流程：
+
+```c
+// 1. 创建套接字
+int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+// 2. 设置服务器地址
+struct sockaddr_in server_addr;
+memset(&server_addr, 0, sizeof(server_addr));
+server_addr.sin_family = AF_INET;
+server_addr.sin_port = htons(8080);
+inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
+
+// 3. 发送数据（每次发送都需要指定服务器地址）
+char msg[] = "Hello Server";
+sendto(sockfd, msg, strlen(msg), 0,
+       (struct sockaddr*)&server_addr, sizeof(server_addr));
+
+// 4. 接收数据
+char buffer[1024];
+ssize_t n = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0, NULL, NULL);
+if (n > 0) {
+    buffer[n] = '\0';
+    printf("Received from server: %s\n", buffer);
+}
+
+// 5. 关闭套接字
+close(sockfd);
+```
+
+**UDP 关键点：**
+- UDP 是无连接的，不需要 `listen()`、`accept()`、`connect()`
+- 服务端必须 `bind()` 绑定端口，客户端通常不绑定（系统自动分配）
+- 每次 `sendto()` 都需要指定目标地址
+- `recvfrom()` 可以获取发送方的地址信息
+
+### 3. TCP服务器和客户端流程
 
 #### TCP服务器端流程：
 
@@ -453,7 +531,7 @@ recv(sockfd, buf, sizeof(buf), 0);
 close(sockfd);
 ```
 
-### 3. 套接字选项设置
+### 4. 套接字选项设置
 
 #### setsockopt() / getsockopt()
 
@@ -473,7 +551,7 @@ int getsockopt(int sockfd, int level, int optname,
 - `optval`：选项值指针
 - `optlen`：选项值长度
 
-### 4. 常用套接字选项详解
+### 5. 常用套接字选项详解
 
 #### ① SO_REUSEADDR - 地址复用
 
@@ -588,7 +666,7 @@ if (error != 0) {
 }
 ```
 
-### 5. 常用选项总结表
+### 6. 常用选项总结表
 
 | 选项 | 级别 | 类型 | 主要用途 |
 |------|------|------|---------|
@@ -601,55 +679,3 @@ if (error != 0) {
 | **SO_LINGER** | SOL_SOCKET | struct linger | 控制close()行为 |
 | **SO_ERROR** | SOL_SOCKET | int | 获取异步错误状态 |
 
-### 6. 完整示例：带选项设置的TCP服务器
-
-```c
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdio.h>
-
-int create_tcp_server(int port) {
-    // 1. 创建套接字
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        perror("socket");
-        return -1;
-    }
-    
-    // 2. 设置套接字选项
-    int opt = 1;
-    // 地址复用
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    // 端口复用（可选）
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
-    // TCP保活
-    setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
-    // 禁用Nagle算法
-    setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
-    
-    // 3. 绑定地址
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-    
-    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("bind");
-        close(sockfd);
-        return -1;
-    }
-    
-    // 4. 监听
-    if (listen(sockfd, 128) < 0) {
-        perror("listen");
-        close(sockfd);
-        return -1;
-    }
-    
-    return sockfd;
-}
-```
